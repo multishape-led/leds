@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>LED Control</title>
+<style>
+:root{
+ --pg:#efe9d6;--cd:#fbf4d2;--pn:#c9c9c9;--bx:#fff;--ink:#141414;--ln:#1b1b1b;
+ --dim:#5c5a50;--sh:rgba(0,0,0,.18);--off:#d8322a;--ok:#17914a;--rg:#1b1b1b;--r:18px}
+@media (prefers-color-scheme:dark){:root{
+ --pg:#15161a;--cd:#262319;--pn:#3c3b38;--bx:#1b1a17;--ink:#f2ecd8;--ln:#000;
+ --dim:#a8a396;--sh:rgba(0,0,0,.5);--rg:#d8d0b8}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;padding:10px 10px 28px;background:var(--pg);color:var(--ink);
+ font:15px/1.35 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+ -webkit-tap-highlight-color:transparent}
+svg{display:block}
+.hid{display:none}
+
+/* ---------- header ---------- */
+/* the same max-width as main, so the header ends level with the right
+   edge of the last column instead of running past it */
+header{background:var(--cd);border:2px solid var(--ln);border-radius:var(--r);
+ padding:10px 14px;margin-bottom:12px;box-shadow:0 2px 0 var(--sh);max-width:1030px}
+.brand{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;
+ font-weight:700;font-size:18px;letter-spacing:.01em}
+.ver{font-size:12px;font-weight:600;color:var(--dim)}
+#net{margin-left:auto;font-size:12px;color:var(--dim);font-weight:500}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(74px,1fr));
+ gap:6px;margin-top:9px}
+.st{background:var(--bx);border:1.5px solid var(--ln);border-radius:11px;
+ padding:5px 8px;min-width:0}
+.st u{display:block;font-size:9.5px;font-weight:700;text-transform:uppercase;
+ letter-spacing:.07em;color:var(--dim);text-decoration:none;white-space:nowrap;
+ overflow:hidden;text-overflow:ellipsis}
+.st b{display:block;font-size:19px;font-weight:700;line-height:1.15;
+ font-variant-numeric:tabular-nums;white-space:nowrap;
+ overflow:hidden;text-overflow:ellipsis}
+.st.na b{color:var(--dim);font-size:15px}
+.st.w{grid-column:span 2}
+.st.w b{font-size:15px}
+/* v25: a hold may be up to 120000 ms and a fade 20000: five and six
+   digits get smaller sizes (same box height) so a narrow box shows them */
+.st b.md{font-size:16px;line-height:1.37}
+.st b.lg{font-size:14px;line-height:1.56}
+
+/* ---------- layout ---------- */
+/* multi-column balances the card heights by itself at every width:
+   one column on a phone, two on a tablet, three on a desktop. */
+main{column-width:318px;column-gap:12px;max-width:1030px}
+.card{background:var(--cd);border:2px solid var(--ln);border-radius:var(--r);
+ padding:12px;box-shadow:0 2px 0 var(--sh);
+ break-inside:avoid;-webkit-column-break-inside:avoid;margin-bottom:12px}
+.card>h2{margin:0 0 9px;font-size:12px;font-weight:700;text-transform:uppercase;
+ letter-spacing:.07em;color:var(--dim);text-align:center}
+.card+.card{margin-top:12px}
+.sub{font-size:11.5px;color:var(--dim);margin-top:8px;line-height:1.3}
+
+/* ---------- panels & controls ---------- */
+.pan{background:var(--pn);border:1.5px solid var(--ln);border-radius:14px;
+ padding:7px;display:flex;align-items:center;gap:8px;justify-content:center}
+.pan+.pan{margin-top:9px}
+.val{background:var(--bx);border:1.5px solid var(--ln);border-radius:10px;
+ min-width:62px;padding:6px 6px 5px;text-align:center;flex:0 0 auto}
+.val b{display:block;font-size:27px;font-weight:700;line-height:1;
+ font-variant-numeric:tabular-nums}
+.val u{display:block;font-size:9px;font-weight:700;letter-spacing:.06em;
+ text-transform:uppercase;color:var(--dim);text-decoration:none;margin-top:2px}
+.val.on b{color:var(--ok)}
+.val.na b{color:var(--dim)}
+.grow{flex:1 1 auto;min-width:0}
+
+button{font:inherit;color:inherit;cursor:pointer;border:none;background:none;
+ padding:0;touch-action:manipulation}
+button:focus-visible{outline:3px solid #2b7fd4;outline-offset:2px}
+
+/* round key: a coloured disc, optionally ringed by cycle arrows */
+.k{position:relative;width:62px;height:62px;flex:0 0 auto;display:grid;
+ place-items:center;border-radius:50%}
+.k .dsc{width:44px;height:44px;border-radius:50%;border:1.5px solid var(--ln);
+ display:grid;place-items:center;overflow:hidden}
+.k.cyc .dsc{width:40px;height:40px}
+.k .rg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.k:active{transform:scale(.93)}
+.k:active .dsc{filter:brightness(1.25)}
+.k[disabled]{opacity:.35;cursor:default}
+.k[disabled]:active{transform:none}
+.ic{width:24px;height:24px;stroke:var(--ln);stroke-width:1.8;fill:none;
+ stroke-linecap:round;stroke-linejoin:round}
+
+/* wide pill buttons */
+.pill{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+ background:var(--cd);border:2px solid var(--ln);border-radius:999px;
+ padding:11px 14px;font-size:14.5px;font-weight:600;box-shadow:0 2px 0 var(--sh)}
+.pill:active{transform:translateY(2px);box-shadow:none}
+.pill .ic{width:19px;height:19px}
+.stack{display:grid;gap:9px}
+
+/* power */
+.pwr{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.pb{display:flex;flex-direction:column;align-items:center;gap:4px;
+ background:var(--bx);border:2px solid var(--ln);border-radius:14px;padding:10px 6px;
+ font-size:12px;font-weight:700;letter-spacing:.08em}
+.pb .ic{width:32px;height:32px;stroke-width:2.1}
+.pb:active{transform:translateY(2px)}
+.pb.o .ic{stroke:var(--off)}.pb.o{color:var(--off)}
+.pb[aria-pressed=true]{background:var(--ok);color:#fff;border-color:var(--ln)}
+.pb[aria-pressed=true] .ic{stroke:#fff}
+.pb.o[aria-pressed=true]{background:var(--off);color:#fff}
+.pb.o[aria-pressed=true] .ic{stroke:#fff}
+
+/* v23: playback -- Pause, Play, Demo. The icons take the text colour,
+   so they stay visible on the dark theme's dark keys. */
+.pwr.pl3{grid-template-columns:repeat(3,1fr)}
+.pl3 .ic{stroke:var(--ink);color:var(--ink)}
+.pb.pz[aria-pressed=true]{background:#f5c400;color:#141414}
+.pb.pz[aria-pressed=true] .ic{stroke:#141414;color:#141414}
+.pb.dm[aria-pressed=true]{background:var(--ok);color:#fff}
+.pb.dm[aria-pressed=true] .ic{stroke:#fff;color:#fff}
+
+/* io row */
+.io{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.io button{display:flex;flex-direction:column;align-items:center;gap:4px;
+ background:var(--bx);border:2px solid var(--ln);border-radius:14px;padding:9px 4px;
+ font-size:11px;font-weight:600}
+.io button:active{transform:translateY(2px)}
+.io .ic{width:26px;height:26px}
+
+/* hue */
+.hrow{display:grid;grid-template-columns:1fr 1fr;gap:8px;background:var(--pn);
+ border:1.5px solid var(--ln);border-radius:14px;padding:7px}
+.hrow+.hrow{margin-top:9px}
+.hk{height:54px;border-radius:12px;border:1.5px solid var(--ln);position:relative}
+.hk:active{transform:scale(.95)}
+.hk span{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+ font-size:11px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.65);
+ letter-spacing:.04em}
+.sweep{display:flex;align-items:center;justify-content:center;gap:7px;
+ font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+ color:var(--dim);margin-bottom:7px}
+.sweep svg{width:34px;height:12px;stroke:var(--dim);stroke-width:1.7;fill:none;
+ stroke-linecap:round;stroke-linejoin:round}
+
+/* timing rows: big key = longer, small key = shorter */
+.tr+.tr{margin-top:11px}
+.tr>h3{margin:0 0 6px;font-size:11.5px;font-weight:700;text-transform:uppercase;
+ letter-spacing:.06em;color:var(--dim);text-align:center}
+.tk{border-radius:50%;border:1.5px solid var(--ln);display:grid;place-items:center}
+.tk:active{transform:scale(.92)}
+.tk i{display:block;height:4px;border-radius:2px;background:var(--ln)}
+.tk.big{width:50px;height:50px}.tk.big i{width:24px;position:relative}
+/* the long bar plus an upright one = a plus sign: big key adds time */
+.tk.big i::after{content:"";position:absolute;left:10px;top:-10px;width:4px;
+ height:24px;border-radius:2px;background:var(--ln)}
+/* the small key stays visually small -- that IS the metaphor -- but its
+   touch area is padded out to a thumb-sized 46px. */
+.tk.sml{width:34px;height:34px;position:relative}.tk.sml i{width:11px}
+.tk.sml::after{content:"";position:absolute;inset:-6px;border-radius:50%}
+.tms{font-size:11px;font-weight:700;color:var(--dim);margin-left:2px}
+
+/* v17: the small Edit button in the Animation card's top-right corner */
+.edb{position:absolute;top:8px;right:10px;border:1.5px solid var(--ln);border-radius:999px;
+ padding:3px 11px;font-size:12px;font-weight:700;background:var(--bx)}
+.edb:active{transform:translateY(1px)}
+.note{min-height:20px;margin:10px 2px 0;font-size:13px;font-weight:600}
+.note.e{color:var(--off)}
+footer{margin:14px 2px 0;font-size:11px;color:var(--dim);line-height:1.4;
+ max-width:1030px}
+/* v26: the board's name heads the page, and Boards goes to the list of
+   every board on the network */
+#bname{overflow-wrap:anywhere}
+.hubb{display:inline-flex;align-items:center;gap:5px;border:1.5px solid var(--ln);
+ border-radius:999px;padding:3px 11px 3px 8px;font-size:12px;font-weight:700;
+ background:var(--bx);color:inherit;text-decoration:none;align-self:center}
+.hubb:active{transform:translateY(1px)}
+.hubb .ic{width:15px;height:15px;stroke-width:2}
+@media(max-width:360px){.st b{font-size:17px}.k{width:56px;height:56px}}
+</style></head><body>
+
+<svg class="hid" aria-hidden="true"><defs>
+<!-- one cycle arrow, rotated 4x -->
+<!-- one cycle arrow. The arc stops short of the white dots at 0/90/180/270
+     so the head never runs into one. -->
+<g id="ar"><path d="M21.61 14.76A10 10 0 0 1 16.38 20.99" fill="none"/>
+<polygon points="14.81,21.76 16.82,21.89 15.95,20.09" stroke-width=".5"/></g>
+<!-- the ring of cycle arrows, drawn once and reused by every cycle key -->
+<symbol id="rg" viewBox="0 0 24 24"><g fill="var(--rg)" stroke="var(--rg)"
+ stroke-width=".85" stroke-linejoin="round"><use href="#ar"/>
+ <use href="#ar" transform="rotate(90 12 12)"/>
+ <use href="#ar" transform="rotate(180 12 12)"/>
+ <use href="#ar" transform="rotate(270 12 12)"/></g>
+ <g fill="#fff" stroke="var(--rg)" stroke-width=".7"><circle cx="22" cy="12" r="1.6"/>
+ <circle cx="12" cy="22" r="1.6"/><circle cx="2" cy="12" r="1.6"/>
+ <circle cx="12" cy="2" r="1.6"/></g></symbol>
+<symbol id="pw" viewBox="0 0 24 24"><path d="M12 2.6v9"/>
+<path d="M7 5.5a7.4 7.4 0 1 0 10 0"/></symbol>
+<symbol id="sv" viewBox="0 0 24 24"><path d="M4.5 3.5h11l4 4v13h-15z"/>
+<path d="M8 3.5v6h7v-6"/><path d="M7 13.5h10v7H7z"/></symbol>
+<symbol id="ld" viewBox="0 0 24 24"><path d="M3.5 5.5h6l2 2.5h9v12h-17z"/>
+<path d="M12 10.5v5.5m0 0-2.4-2.4m2.4 2.4 2.4-2.4"/></symbol>
+<symbol id="rs" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/>
+<path d="M20.4 3.4v5.2h-5.2"/></symbol>
+<symbol id="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.4"/>
+<path d="M12 1.6v3M12 19.4v3M1.6 12h3M19.4 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M19.4 4.6l-2.1 2.1M6.7 17.3l-2.1 2.1"/></symbol>
+<symbol id="drp" viewBox="0 0 24 24"><path d="M12 2.2c4.2 5 6.6 8 6.6 11.2a6.6 6.6 0 1 1-13.2 0C5.4 10.2 7.8 7.2 12 2.2z"/>
+<circle cx="12" cy="13.6" r="2.6"/></symbol>
+<symbol id="wf" viewBox="0 0 24 24"><path d="M2.2 8.6a15 15 0 0 1 19.6 0"/>
+<path d="M5.6 12.4a10 10 0 0 1 12.8 0"/><path d="M9 16.2a5 5 0 0 1 6 0"/>
+<circle cx="12" cy="19.6" r="1.1" fill="currentColor" stroke="none"/></symbol>
+<symbol id="dl" viewBox="0 0 24 24"><path d="M12 2.8v11.4"/>
+<path d="m7.4 9.8 4.6 4.6 4.6-4.6"/><path d="M3.6 17.6v3.6h16.8v-3.6"/></symbol>
+<symbol id="pz" viewBox="0 0 24 24"><path d="M8.5 5v14M15.5 5v14" stroke-width="3.2"/></symbol>
+<symbol id="pl" viewBox="0 0 24 24"><path d="M7.5 4.8v14.4L19 12z" fill="currentColor"/></symbol>
+<symbol id="dm" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/>
+<path d="M7 5.5v13M17 5.5v13M3.5 9.5H7M3.5 14.5H7M17 9.5h3.5M17 14.5h3.5"/>
+<path d="M10.4 9.6v4.8l4-2.4z" fill="currentColor"/></symbol>
+<symbol id="sp" viewBox="0 0 24 24"><path d="M12 2.6 14 9l6.4 2-6.4 2-2 6.4-2-6.4L3.6 11 10 9z"/>
+<path d="M19 3.2v3.4M17.3 4.9h3.4"/></symbol>
+<symbol id="grd" viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="1.6"/>
+<rect x="13.5" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.6"/>
+<rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.6"/></symbol>
+</defs></svg>
+
+<header>
+ <div class="brand"><span id="bname">MultiShape&nbsp;LED</span>
+  <span class="ver" id="pver">v34</span>
+  <a class="hubb" id="b_hub" href="/boards" target="ms_hub"
+   title="Every board on this network: open several at once"><svg class="ic"><use href="#grd"/></svg>Boards</a>
+  <span id="net">&hellip;</span></div>
+ <div class="stats">
+  <div class="st"><u>Shape</u><b id="s_sh">&ndash;</b></div>
+  <div class="st w"><u>Mode</u><b id="s_md">&ndash;</b></div>
+  <div class="st"><u>Bright</u><b id="s_br">&ndash;</b></div>
+  <div class="st"><u>Sat</u><b id="s_sa">&ndash;</b></div>
+  <div class="st" id="s_hw"><u>Hue</u><b id="s_hu">&ndash;</b></div>
+  <div class="st" id="s_ew"><u>Fade ms</u><b id="s_ev">&ndash;</b></div>
+  <div class="st" id="s_cw"><u>Hold ms</u><b id="s_ca">&ndash;</b></div>
+  <div class="st" id="s_dw"><u>Dark ms</u><b id="s_dk">&ndash;</b></div>
+ </div>
+</header>
+
+<main>
+
+ <section class="card">
+  <h2>Power</h2>
+  <div class="pwr">
+   <button class="pb" id="b_on" onclick="power(1)" aria-pressed="false">
+    <svg class="ic"><use href="#pw"/></svg>ON</button>
+   <button class="pb o" id="b_off" onclick="power(0)" aria-pressed="false">
+    <svg class="ic"><use href="#pw"/></svg>OFF</button>
+  </div>
+  <div class="io" style="margin-top:9px">
+   <button onclick="save()"><svg class="ic"><use href="#sv"/></svg>Save</button>
+   <button onclick="load()"><svg class="ic"><use href="#ld"/></svg>Load</button>
+   <button onclick="reset()"><svg class="ic"><use href="#rs"/></svg>Reset</button>
+  </div>
+ </section>
+
+ <section class="card">
+  <h2>Playback</h2>
+  <div class="pwr pl3">
+   <button class="pb pz" id="b_pause" onclick="pk(25)" aria-pressed="false"
+    title="Freeze the strip; changes show at Play">
+    <svg class="ic"><use href="#pz"/></svg>PAUSE</button>
+   <button class="pb" id="b_play" onclick="pk(26)"
+    title="Start every shape together">
+    <svg class="ic"><use href="#pl"/></svg>PLAY</button>
+   <button class="pb dm" id="b_demo" onclick="pk(27)" aria-pressed="false"
+    title="Play the demo sequence set on the Edit page">
+    <svg class="ic"><use href="#dm"/></svg><span id="demotx">DEMO</span></button>
+  </div>
+  <div class="sub" id="psub">Play starts every shape together.</div>
+ </section>
+
+ <section class="card">
+  <h2>Brightness</h2>
+  <div class="pan">
+   <button class="k" onclick="p(0)" title="Brighter">
+    <span class="dsc" style="background:#bfe4f7">
+     <svg class="ic" style="width:27px;height:27px"><use href="#sun"/></svg></span></button>
+   <div class="val grow"><b id="v_br">&ndash;</b><u>of 100</u></div>
+   <button class="k" onclick="p(1)" title="Dimmer">
+    <span class="dsc" style="background:#69a9a6">
+     <svg class="ic" style="width:19px;height:19px"><use href="#sun"/></svg></span></button>
+  </div>
+  <h2 style="margin:11px 0 9px">Saturation</h2>
+  <div class="pan">
+   <button class="k" onclick="p(19)" title="More colour">
+    <span class="dsc" style="background:#b44c9e">
+     <svg class="ic" style="width:25px;height:25px;stroke:#fff"><use href="#drp"/></svg></span></button>
+   <div class="val grow"><b id="v_sa">&ndash;</b><u>of 100</u></div>
+   <button class="k" onclick="p(23)" title="Less colour">
+    <span class="dsc" style="background:#f4f1e2">
+     <svg class="ic" style="width:25px;height:25px"><use href="#drp"/></svg></span></button>
+  </div>
+ </section>
+
+ <section class="card">
+  <h2>Shape</h2>
+  <div class="pan">
+   <div class="val"><b id="v_sh">&ndash;</b><u>of <span id="v_shn">&ndash;</span></u></div>
+   <button class="k cyc" onclick="p(15)" title="Next shape">
+    <span class="dsc" style="background:#69a9a6"></span>
+    <svg class="rg" viewBox="0 0 24 24"><use href="#rg"/></svg>
+   </button>
+  </div>
+ </section>
+
+ <section class="card">
+  <h2>Colour source</h2>
+  <div class="pan">
+   <button class="k" id="b_sgl" onclick="multi(0)" title="Single colour">
+    <span class="dsc" style="background:#f4f1e2">
+     <svg viewBox="0 0 24 24" style="width:28px;height:28px">
+      <rect x="4.5" y="4.5" width="15" height="15" rx="3.5" fill="#1b9bd8"
+       stroke="var(--ln)" stroke-width="1.5"/></svg></span></button>
+   <button class="k" id="b_mlt" onclick="multi(1)" title="Palette">
+    <span class="dsc" style="background:#bfe4f7">
+     <svg viewBox="0 0 24 24" style="width:26px;height:26px">
+      <circle cx="12" cy="6.4" r="1.9" fill="#1b9bd8"/>
+      <circle cx="17.6" cy="9.6" r="1.9" fill="#e5127d"/>
+      <circle cx="17.6" cy="15.2" r="1.9" fill="#f5c400"/>
+      <circle cx="12" cy="18" r="1.9" fill="#0c9a4e"/>
+      <circle cx="6.4" cy="15.2" r="1.9" fill="#f07c1e"/>
+      <circle cx="6.4" cy="9.6" r="1.9" fill="#7a4fc0"/>
+     </svg></span></button>
+  </div>
+  <div class="sub" id="csub">Single colour: the hue keys steer it.</div>
+ </section>
+
+ <section class="card" id="c_pal">
+  <h2>Palette</h2>
+  <div class="pan">
+   <div class="val"><b id="v_pl">&ndash;</b><u>of 5</u></div>
+   <button class="k cyc" onclick="p(11)" title="Next palette">
+    <span class="dsc" style="background:conic-gradient(#e52421,#f5c400,#0c9a4e,
+     #4fc3f7,#1b9bd8,#7a4fc0,#e5127d,#e52421)"></span>
+    <svg class="rg" viewBox="0 0 24 24"><use href="#rg"/></svg>
+   </button>
+  </div>
+ </section>
+
+
+
+ <section class="card" id="c_hue">
+  <h2>Hue</h2>
+  <div class="sweep"><svg viewBox="0 0 34 12"><path d="M2 6h30"/>
+   <path d="M6 2.5 2 6l4 3.5M28 2.5 32 6l-4 3.5"/></svg>each row sweeps one band</div>
+  <div class="hrow">
+   <button class="hk" style="background:#1b9bd8" onclick="hue(6,'blue')"><span>BLUE</span></button>
+   <button class="hk" style="background:#e5127d" onclick="hue(22,'pink')"><span>PINK</span></button>
+  </div>
+  <div class="hrow">
+   <button class="hk" style="background:#0c9a4e" onclick="hue(5,'green')"><span>GREEN</span></button>
+   <button class="hk" style="background:#4fc3f7" onclick="hue(21,'cyan')"><span>CYAN</span></button>
+  </div>
+  <div class="hrow">
+   <button class="hk" style="background:#e52421" onclick="hue(4,'red')"><span>RED</span></button>
+   <button class="hk" style="background:#f5c400" onclick="hue(20,'yellow')"><span>YELLOW</span></button>
+  </div>
+  <div class="sub">A press moves 5&deg; and stops at its band&rsquo;s end, so at pure
+   red the RED key has nowhere further to go. Tapping into a band you left
+   returns to where you were in it.</div>
+ </section>
+
+
+ <section class="card" style="position:relative">
+  <button class="edb" id="b_edit" onclick="location.href='/edit'"
+   title="Type every shape's modes, colours and times directly">Edit</button>
+  <h2>Animation</h2>
+  <div class="tr"><h3>Pulse mode</h3>
+   <div class="pan">
+    <div class="val"><b id="v_pm">&ndash;</b><u>of 3</u></div>
+    <button class="k cyc" onclick="p(12)" title="Next pulse mode">
+     <span class="dsc" style="background:radial-gradient(circle at 34% 30%,
+      #eaf7ff,#57b6e8 72%)"></span>
+     <svg class="rg" viewBox="0 0 24 24"><use href="#rg"/></svg>
+    </button>
+    <div class="sub grow" style="margin:0">off &rarr; 1 &rarr; 2 &rarr; 3 &rarr; off</div>
+   </div></div>
+  <div class="tr"><h3>Running mode</h3>
+   <div class="pan">
+    <div class="val"><b id="v_rm">&ndash;</b><u>of 5</u></div>
+    <button class="k cyc" onclick="p(14)" title="Next running mode">
+     <span class="dsc" style="background:repeating-radial-gradient(circle at 50% 50%,
+      #e3d96b 0 3px,#d6603a 3px 6px,#8fae4e 6px 9px)"></span>
+     <svg class="rg" viewBox="0 0 24 24"><use href="#rg"/></svg>
+    </button>
+    <div class="sub grow" style="margin:0">off &rarr; 1 &hellip; 5 &rarr; off</div>
+   </div></div>
+  <div class="tr"><h3>Wave mode</h3>
+   <div class="pan">
+    <div class="val"><b id="v_wm">&ndash;</b><u>of 6</u></div>
+    <button class="k cyc" onclick="p(24)" title="Next wave mode (not on the remote)">
+     <span class="dsc" style="background:linear-gradient(90deg,#0d3b66,#bfe4f7 25%,
+      #0d3b66 50%,#bfe4f7 75%,#0d3b66)"></span>
+     <svg class="rg" viewBox="0 0 24 24"><use href="#rg"/></svg>
+    </button>
+    <div class="sub grow" style="margin:0">off &rarr; 1 &hellip; 6 &rarr; off.
+     4&ndash;6 change colour. Only here, not on the remote.</div>
+   </div></div>
+  <div class="tr"><h3>State</h3>
+   <div class="pan">
+    <div class="val"><b id="v_stn">&ndash;</b><u>0&ndash;3</u></div>
+    <button class="k cyc" id="b_st" onclick="p(13)" title="Next state">
+     <span class="dsc" style="background:#17914a"></span>
+     <svg class="rg" viewBox="0 0 24 24"><use href="#rg"/></svg>
+    </button>
+    <div class="sub grow" style="margin:0" id="stsub">how many groups the LEDs split
+     into. One too big for the shape is skipped.</div>
+   </div></div>
+  <div class="sub" id="asub">Pulse, running and wave are mutually exclusive &mdash;
+   starting one stops the others.</div>
+ </section>
+
+ <section class="card" id="c_tim">
+  <h2>Timing</h2>
+  <div class="tr"><h3>Fade / run time</h3>
+   <div class="pan">
+    <button class="tk big" style="background:#fff" onclick="p(8)" title="Longer">
+     <i></i></button>
+    <button class="tk sml" style="background:#c9c9c9" onclick="p(16)" title="Shorter">
+     <i></i></button>
+    <div class="val grow"><b id="v_ev">&ndash;</b><u>ms</u></div>
+   </div></div>
+  <div class="tr"><h3>Hold bright time</h3>
+   <div class="pan">
+    <button class="tk big" style="background:#fdf3b8" onclick="p(9)" title="Longer">
+     <i></i></button>
+    <button class="tk sml" style="background:#f5e463" onclick="p(17)" title="Shorter">
+     <i></i></button>
+    <div class="val grow"><b id="v_ca">&ndash;</b><u>ms</u></div>
+   </div></div>
+  <div class="tr"><h3>Dark state time</h3>
+   <div class="pan">
+    <button class="tk big" style="background:#a6dcb8" onclick="p(10)" title="Longer">
+     <i></i></button>
+    <button class="tk sml" style="background:#4fa8a0" onclick="p(18)" title="Shorter">
+     <i></i></button>
+    <div class="val grow"><b id="v_dk">&ndash;</b><u>ms</u></div>
+   </div></div>
+  <div class="sub" id="tsub">Big key lengthens, small key shortens.</div>
+ </section>
+
+ <section class="card">
+  <h2>Board</h2>
+  <div class="stack">
+   <button class="pill" id="dth" onclick="dither()">
+    <svg class="ic"><use href="#sp"/></svg><span>Dithering&hellip;</span></button>
+   <button class="pill" id="fcv" onclick="fcurve()"
+    title="How Pulse Modes 1 and 2 dim: even in light (1.0) or even to the eye (2.5)">
+    <svg class="ic"><use href="#sp"/></svg><span>Fade curve&hellip;</span></button>
+   <button class="pill" id="rfr" onclick="rfront()"
+    title="How the running modes move: each LED switched at once, or a soft edge gliding along">
+    <svg class="ic"><use href="#sp"/></svg><span>Running front&hellip;</span></button>
+   <button class="pill" id="b_wifi" onclick="location.href='/wifi'">
+    <svg class="ic"><use href="#wf"/></svg>WiFi settings</button>
+   <button class="pill" id="b_fw" onclick="location.href='/update'">
+    <svg class="ic"><use href="#dl"/></svg>Firmware update</button>
+  </div>
+  <div class="sub">Dithering is the smooth dimming. It is not saved &mdash; it
+   comes back on after a restart. The fade curve is how Pulse Modes 1 and 2
+   dim: 1.0 takes the same amount of light away every moment (as before
+   v28), which the eye sees speeding up near the bottom; 2.5 is about even
+   to the eye; 3.0 follows CIE lightness. The running front is how the
+   running modes move: sharp switches each LED at once (as before v30);
+   soft glides an edge 1, 2 or 3 LEDs long along the shape, each sweep
+   taking exactly its eval time. A new front comes in with each shape&rsquo;s
+   next cycle. Both are kept.</div>
+  <div class="sub" id="nethint">&nbsp;</div>
+ </section>
+</main>
+
+<div class="note" id="err"></div>
+<footer>Every key sends the same code as the matching button on the IR remote &mdash;
+ except the Wave key and Pause, Play and Demo, which the remote does not have.</footer>
+<style>
+#rly{max-width:1030px;margin:0 0 12px;display:flex;align-items:center;gap:10px;
+ background:var(--bx);border:2px solid var(--ln);border-radius:14px;padding:8px 10px;
+ font-size:13px;font-weight:600;box-shadow:0 2px 0 var(--sh)}
+#rly i{width:12px;height:12px;border-radius:50%;flex:0 0 auto;background:var(--dim)}
+#rly i.ok{background:var(--ok)}#rly i.bad{background:var(--off)}
+#rly span{flex:1 1 auto;min-width:0}
+#rly button{border:1.5px solid var(--ln);border-radius:999px;padding:5px 11px;
+ font-size:12px;font-weight:700;background:var(--cd)}
+#rset,#rbd{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;
+ align-items:flex-start;justify-content:center;padding:16px;overflow:auto;z-index:9}
+#rset.on,#rbd.on{display:flex}
+#rset form,#rbd .sh{background:var(--cd);border:2px solid var(--ln);border-radius:18px;
+ padding:14px;width:100%;max-width:420px;margin-top:4vh}
+#rset h2,#rbd h2{margin:0 0 4px;font-size:16px}
+#rset label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;
+ letter-spacing:.07em;color:var(--dim);margin:11px 0 4px}
+#rset input{width:100%;padding:11px 10px;background:var(--bx);color:var(--ink);
+ border:1.5px solid var(--ln);border-radius:12px;font:inherit;font-size:16px}
+#rset .row,#rbd .row{display:flex;gap:8px;margin-top:14px}
+#rset .row button,#rbd .row button{flex:1;border:2px solid var(--ln);border-radius:999px;
+ padding:11px;font-weight:700;background:var(--bx)}
+#rset .row button.go{background:var(--ok);color:#fff}
+#rset p,#rbd p{font-size:12px;color:var(--dim);margin:8px 0 0;line-height:1.35}
+/* v31: the Boards menu */
+#b_rbd b{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;
+ background:var(--ok);color:#fff;font-size:11px;line-height:18px;text-align:center}
+#b_rbd b:empty{display:none}
+#rbd h3{margin:14px 0 6px;font-size:10px;font-weight:700;text-transform:uppercase;
+ letter-spacing:.07em;color:var(--dim)}
+.rbl{display:grid;gap:8px;margin-top:10px}
+.rbr{display:flex;gap:6px;align-items:stretch}
+.rbm{flex:1 1 auto;min-width:0;display:grid;grid-template-columns:auto 1fr auto;
+ column-gap:10px;align-items:center;text-align:left;background:var(--bx);
+ border:2px solid var(--ln);border-radius:14px;padding:9px 12px;box-shadow:0 2px 0 var(--sh)}
+.rbm:active{transform:translateY(2px);box-shadow:none}
+.rbm i{grid-row:1/5;width:12px;height:12px;border-radius:50%;background:var(--dim)}
+.rbm i.on{background:var(--ok)}.rbm i.pz{background:#f5c400}
+.rbm i.no{background:none;border:2px solid var(--dim)}
+.rbm b{grid-column:2;font-size:15px;overflow-wrap:anywhere}
+.rbm>span{grid-column:2;font-size:12px;color:var(--dim);overflow-wrap:anywhere}
+.rbm small{grid-column:2;font-size:11px;color:var(--dim);opacity:.85;overflow-wrap:anywhere}
+.rbm em{grid-column:3;grid-row:1/5;font-style:normal;font-size:11px;font-weight:700;
+ color:var(--ok);display:none}
+.rbr.cur .rbm{border-color:var(--ok);box-shadow:0 0 0 2px var(--ok)}
+.rbr.cur .rbm em{display:block}
+.rbr.off .rbm{opacity:.62}
+.rbh{flex:0 0 auto;align-self:center;border:1.5px solid var(--ln);border-radius:999px;
+ padding:8px 12px;font-size:12px;font-weight:700;background:var(--bx)}
+#rbd p.e{color:var(--off);font-weight:600}
+#rbd p.e:empty{display:none}
+/* v33: boards together, as on the list of boards on the local network */
+.rbc{flex:0 0 auto;display:grid;place-items:center;width:30px}
+.rbc input{width:22px;height:22px;margin:0;accent-color:var(--ok)}
+.rbc input:disabled{opacity:.3}
+.rbm>.rbg{display:flex;gap:6px;align-items:baseline;margin-top:3px;color:var(--ink);font-weight:600}
+.rbg u{display:inline-grid;place-items:center;min-width:19px;height:19px;border-radius:6px;
+ border:1.5px solid var(--ln);font-size:11px;font-weight:800;color:#141414;text-decoration:none;
+ flex:0 0 auto}
+.rbg u:empty{display:none}
+.rbt{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;padding-top:10px;
+ border-top:1.5px dashed var(--pn)}
+.rbt .lbl{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;
+ font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--dim)}
+.rtb{display:flex;align-items:center;justify-content:center;gap:6px;border:2px solid var(--ln);
+ border-radius:999px;padding:9px 8px;font-size:13.5px;font-weight:700;background:var(--bx);
+ box-shadow:0 2px 0 var(--sh)}
+.rtb:active{transform:translateY(2px);box-shadow:none}
+.rtb[disabled]{opacity:.42;transform:none;box-shadow:0 2px 0 var(--sh);cursor:default}
+.rtb .ic{width:18px;height:18px;stroke:var(--ink);color:var(--ink)}
+.rsa{border:1.5px solid var(--ln);border-radius:999px;padding:3px 10px;font-size:11px;
+ font-weight:700;background:var(--bx);text-transform:none;letter-spacing:0;color:var(--ink)}
+#rbd p#rbd_n{min-height:17px;font-size:12.5px;font-weight:600;color:var(--ink)}
+#rbd p#rbd_n.e{color:var(--off)}
+</style>
+<svg style="display:none" aria-hidden="true"><defs>
+<symbol id="rlk" viewBox="0 0 24 24"><path d="M9.5 14.5l5-5"/><path d="M11 6.5l1.6-1.6a4 4 0 0 1 5.7 5.7L16.7 12.2"/>
+<path d="M13 17.5l-1.6 1.6a4 4 0 0 1-5.7-5.7L7.3 11.8"/></symbol>
+<symbol id="rul" viewBox="0 0 24 24"><path d="M11 6.5l1.6-1.6a4 4 0 0 1 5.7 5.7L16.7 12.2"/>
+<path d="M13 17.5l-1.6 1.6a4 4 0 0 1-5.7-5.7L7.3 11.8"/><path d="M4 4l3 3M20 20l-3-3"/></symbol>
+</defs></svg>
+<div id="rset"><form onsubmit="return RELAY.saveForm()">
+ <h2>Relay settings</h2>
+ <p>The same broker, user and topic as on the board&rsquo;s WiFi setup page.
+  Kept only in this browser, on this phone.</p>
+ <label for="rq_h">Broker address</label>
+ <input id="rq_h" placeholder="xxxxxxxx.s1.eu.hivemq.cloud" autocapitalize="off"
+  autocorrect="off" spellcheck="false" required>
+ <label for="rq_p">WebSocket port</label>
+ <input id="rq_p" inputmode="numeric" placeholder="8884">
+ <label for="rq_u">User name</label>
+ <input id="rq_u" autocapitalize="off" autocorrect="off" spellcheck="false">
+ <label for="rq_w">Password</label>
+ <input id="rq_w" type="password">
+ <label for="rq_t">Topic</label>
+ <input id="rq_t" placeholder="multishape" autocapitalize="off" autocorrect="off"
+  spellcheck="false">
+ <div class="row"><button type="button" onclick="RELAY.closeForm()">Cancel</button>
+  <button class="go" type="submit">Save and connect</button></div>
+ <p>Use a separate broker user for the phone if you like; it only needs to
+  publish to <b>topic/cmd</b> and subscribe to <b>topic/state</b> and
+  <b>topic/online</b> &mdash; and, for the <b>Boards</b> list, to
+  <b>+/state</b> and <b>+/online</b>, and to publish to <b>+/cmd</b> to run
+  boards together.</p>
+ <p>Several boards: each has its own topic. The <b>Boards</b> button at the top
+  lists every board on this broker; a tap switches to it. A board can also be
+  opened directly with <b>?topic=</b> and its topic at the end of this page&rsquo;s
+  address &mdash; one home-screen icon per board, if you like.</p>
+</form></div>
+<div id="rbd" onclick="if(event.target===this)RELAY.closeMenu()">
+ <div class="sh" role="dialog" aria-modal="true" aria-labelledby="rbd_h">
+ <h2 id="rbd_h">Boards</h2>
+ <p>Tap a board to control it on this page. Tick boards to pause, play or run
+  them in step together.</p>
+ <div class="rbl" id="rbd_on"></div>
+ <div class="rbt" id="rbd_t">
+  <div class="lbl">Together<button type="button" class="rsa" id="rbd_all"
+   onclick="RELAY.selAll()">Select all</button></div>
+  <button type="button" class="rtb" id="rbd_pz" onclick="RELAY.grp('pause')" disabled>
+   <svg class="ic"><use href="#pz"/></svg>Pause</button>
+  <button type="button" class="rtb" id="rbd_pl" onclick="RELAY.grp('play')" disabled>
+   <svg class="ic"><use href="#pl"/></svg>Play</button>
+  <button type="button" class="rtb" id="rbd_sy" onclick="RELAY.grp('sync')" disabled
+   title="Every cycle starts together on these boards, timed to the longest -- from now on">
+   <svg class="ic"><use href="#rlk"/></svg>Run in step</button>
+  <button type="button" class="rtb" id="rbd_us" onclick="RELAY.grp('unsync')" disabled>
+   <svg class="ic"><use href="#rul"/></svg>Not in step</button>
+ </div>
+ <p id="rbd_n" role="status"></p>
+ <h3 id="rbd_oh">Not connected just now</h3>
+ <div class="rbl" id="rbd_off"></div>
+ <p class="e" id="rbd_w"></p>
+ <p><b>Run in step</b> makes the ticked boards one group: every cycle starts on all of
+  them at the same moment, once the longest is over. <b>Pause</b> and <b>Play</b> act on
+  the ticked boards and the rest of their groups. The boards keep time among themselves
+  over their own WiFi, so the boards of a group must be on the same network; the relay
+  only takes the command to one of them.</p>
+ <p><b>A board missing?</b> Its relay is not set up yet. At home, on the same WiFi as
+  the boards: open that board&rsquo;s own page (type its address, http://192.168.&hellip;,
+  in the browser &mdash; or press <b>Boards</b> on any board&rsquo;s page and open it
+  from the list), press <b>WiFi settings</b> in its <b>Board</b> card, and fill in the
+  card <b>Remote access</b>: the same broker, user name and password as the other
+  boards, and a topic of its own. Then <b>Save and connect the relay</b>.</p>
+ <div class="row"><button type="button" onclick="RELAY.closeMenu()">Close</button></div>
+ </div>
+</div>
+<script>
+var RELAY=(function(){
+ var KEY='multishape-relay',cfg=null,ws=null,up=false,online=null,state=null,
+  stateAt=0,buf=new Uint8Array(0),waiters=[],connWait=[],pingT=0,retryMs=2000,
+  retryT=0,rid=1000000+Math.floor(Math.random()*1e9),why='',realFetch=window.fetch;
+ var enc=new TextEncoder(),dec=new TextDecoder();
+ // v26: ?topic=... in the address picks the board, for this tab only.
+ var urlTopic=(function(){var m=/[?&]topic=([^&#]*)/.exec(location.search);
+  try{return m?decodeURIComponent(m[1].replace(/\+/g,' ')).trim().replace(/\/+$/,''):''}
+  catch(e){return ''}})();
+ function topic(){return urlTopic||(cfg&&cfg.topic)||'multishape'}
+ // v31: every board on the broker, by topic: {t, s: its last state, on:
+ // true/false/null (online flag; null = not heard yet), at: when}
+ var boards={},seeAll=null,hidden=[],gen=0,fromUrl=!!urlTopic,drawT=0,drawn='';
+ // v33: boards ticked in the menu (by topic), group commands waiting for
+ // their answer, and whether one is under way
+ var sel={},gwait=[],busy=false;
+
+ // ---------- settings, kept in this browser ----------
+ function load(){try{cfg=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){cfg=null}
+  try{hidden=JSON.parse(localStorage.getItem(KEY+'-hidden')||'[]')||[]}catch(e){hidden=[]}}
+ function store(){try{localStorage.setItem(KEY,JSON.stringify(cfg))}catch(e){}}
+ function storeHidden(){try{localStorage.setItem(KEY+'-hidden',JSON.stringify(hidden))}catch(e){}}
+ function $(i){return document.getElementById(i)}
+ function openForm(){
+  var c=cfg||{};$('rq_h').value=c.host||'';$('rq_p').value=c.port||8884;
+  $('rq_u').value=c.user||'';$('rq_w').value=c.pass||'';$('rq_t').value=topic();
+  $('rset').className='on';
+ }
+ function closeForm(){$('rset').className=''}
+ function saveForm(){
+  var typed=($('rq_t').value.trim()||'multishape').replace(/\/+$/,''),old=cfg&&cfg.topic;
+  // With ?topic= in the address, a topic typed here is for this tab;
+  // the saved one (for the address without ?topic=) stays as it was.
+  if(urlTopic)urlTopic=typed;
+  cfg={host:$('rq_h').value.trim(),port:parseInt($('rq_p').value,10)||8884,
+   user:$('rq_u').value.trim(),pass:$('rq_w').value,
+   topic:urlTopic?(old||typed):typed};
+  store();closeForm();state=null;online=null;restart();return false;
+ }
+
+ // ---------- status strip ----------
+ function bar(txt,cls){var b=$('rly');if(!b)return;
+  b.querySelector('span').textContent=txt;b.querySelector('i').className=cls||''}
+ function showState(){
+  if(!cfg)return bar('No relay set up yet','bad');
+  if(!up)return bar(why||'Connecting to the relay…',why?'bad':'');
+  if(online===false)return bar('Relay connected — but the board is OFFLINE','bad');
+  if(online===true)return bar('Connected to '+(state&&state.bn?state.bn:'the board')+
+   ' through '+cfg.host,'ok');
+  bar('Relay connected, waiting for the board…','');
+ }
+
+ // ---------- MQTT 3.1.1 over WebSocket ----------
+ function str(s){var b=enc.encode(s);return [b.length>>8,b.length&255].concat(Array.from(b))}
+ function pkt(h,body){var n=body.length,out=[h];
+  do{var d=n%128;n=Math.floor(n/128);if(n>0)d|=128;out.push(d)}while(n>0);
+  return new Uint8Array(out.concat(body))}
+ function tx(a){if(ws&&ws.readyState===1)ws.send(a)}
+ function t(x){return topic()+'/'+x}
+
+ function restart(){
+  clearTimeout(retryT);clearInterval(pingT);up=false;
+  if(ws){ws.onclose=null;try{ws.close()}catch(e){}ws=null}
+  if(!cfg||!cfg.host){showState();openForm();return}
+  why='';showState();
+  var h=cfg.host,url=/^wss?:\/\//.test(h)?h:'wss://'+h+':'+cfg.port+'/mqtt';
+  try{ws=new WebSocket(url,['mqtt'])}catch(e){why='Bad broker address';showState();return}
+  ws.binaryType='arraybuffer';buf=new Uint8Array(0);
+  ws.onopen=function(){
+   var f=0x02|(cfg.user?0x80:0)|(cfg.user&&cfg.pass?0x40:0),
+    body=[].concat(str('MQTT'),[4,f,0,30],
+     str('msl-phone-'+Math.random().toString(16).slice(2,10)),
+     cfg.user?str(cfg.user):[],cfg.user&&cfg.pass?str(cfg.pass):[]);
+   tx(pkt(0x10,body));
+  };
+  ws.onmessage=function(ev){
+   var a=new Uint8Array(ev.data),m=new Uint8Array(buf.length+a.length);
+   m.set(buf);m.set(a,buf.length);buf=m;parse();
+  };
+  ws.onclose=function(){
+   var was=up;up=false;clearInterval(pingT);
+   if(!why)why=was?'Relay connection lost — reconnecting…':'Cannot reach the relay — retrying…';
+   showState();drawSoon();
+   retryT=setTimeout(restart,retryMs);retryMs=Math.min(retryMs*2,30000);
+  };
+ }
+ function parse(){
+  for(;;){
+   if(buf.length<2)return;
+   var mul=1,len=0,i=1,d;
+   do{if(i>=buf.length)return;d=buf[i++];len+=(d&127)*mul;mul*=128}while(d&128);
+   if(buf.length<i+len)return;
+   var h=buf[0],b=buf.subarray(i,i+len);buf=buf.slice(i+len);
+   var type=h>>4;
+   if(type===2){  // CONNACK
+    var rc=b[1];
+    if(rc!==0){
+     why=rc===4||rc===5?'Relay refused the user name or password':'Relay refused the connection ('+rc+')';
+     retryMs=30000;showState();try{ws.close()}catch(e){}return;
+    }
+    up=true;why='';retryMs=2000;
+    tx(pkt(0x82,[0,1].concat(str(t('state')),[0],str(t('online')),[0])));
+    // v31: and every other board's, for the Boards menu (packet id 2).
+    // The retained messages of all of them arrive at once, so the table
+    // is started afresh rather than kept from the last connection.
+    boards={};
+    tx(pkt(0x82,[0,2].concat(str('+/state'),[0],str('+/online'),[0],
+     str('+/+/state'),[0],str('+/+/online'),[0])));
+    pingT=setInterval(function(){tx(new Uint8Array([0xC0,0]))},20000);
+    showState();drawSoon();connWait.splice(0).forEach(function(f){f()});
+   }else if(type===9){  // SUBACK
+    // 0x80 for a filter = not allowed. Any wildcard granted is enough.
+    if(b[0]===0&&b[1]===2){seeAll=false;
+     for(var k=2;k<b.length;k++)if(b[k]!==0x80)seeAll=true;drawSoon()}
+   }else if(type===3){  // PUBLISH
+    var qos=(h>>1)&3,tl=(b[0]<<8)|b[1],topic=dec.decode(b.subarray(2,2+tl)),
+     msg=dec.decode(b.subarray(2+tl+(qos?2:0)));
+    var bt=/^(.+)\/(state|online)$/.exec(topic);
+    if(bt)seen(bt[1],bt[2],msg);
+    if(topic===t('online')){online=(msg==='1');showState();}
+    else if(topic===t('state')){
+     try{state=JSON.parse(msg)}catch(e){continue}
+     stateAt=Date.now();if(online===null)online=true;showState();
+     waiters=waiters.filter(function(w){
+      if(w.id===null||w.id===state.ack){w.ok(state);return false}return true});
+    }
+   }
+  }
+ }
+
+ // ---------- v31: the boards on this broker ----------
+ function seen(tp,kind,msg){
+  var b=boards[tp];
+  if(kind==='state'){
+   // An empty retained message is the broker's way of deleting one.
+   if(!msg){if(b){b.s=null;drawSoon()}return}
+   var s;try{s=JSON.parse(msg)}catch(e){return}
+   // Only a MultiShape board's state: other things on the same broker
+   // may well have topics ending in /state.
+   if(!s||typeof s!=='object'||!('ack' in s)||!('ver' in s))return;
+   if(!b)b=boards[tp]={t:tp,on:null,s:null,at:0};
+   b.s=s;b.at=Date.now();
+   // v33: the answer to a group command sent to this board
+   gwait=gwait.filter(function(w){if(w.t===tp&&s.ack===w.id){w.ok(s);return false}return true});
+  }else{
+   if(!b)b=boards[tp]={t:tp,on:null,s:null,at:0};
+   b.on=msg==='1'?true:msg==='0'?false:null;
+   // A board hidden here that connects again is shown again.
+   if(b.on&&hidden.indexOf(tp)>=0){hidden=hidden.filter(function(x){return x!==tp});storeHidden()}
+  }
+  drawSoon();
+ }
+ // Unknown counts as connected: the state and the flag come separately,
+ // and a state means the board was there to send it.
+ function isOn(b){return b.on!==false}
+ function nm(b){return b.s&&b.s.bn?b.s.bn:b.t}
+ function what(b){
+  if(!isOn(b))return 'Not connected to the relay';
+  var s=b.s;if(!s)return 'Waiting for the board…';
+  if(!s.power)return 'Off';
+  // the same words as on the list of boards on the local network
+  return 'On'+(s.paused?' · paused':'')+(s.demo?' · demo step '+s.demo:'')+
+   ' · '+(s.shapes>1?'shape '+s.shape+': ':'')+s.mode;
+ }
+ function dot(b){return !isOn(b)?'no':!b.s||!b.s.power?'':b.s.paused?'pz':'on'}
+ function lists(){
+  var cur=topic(),all=[],live={},on=[],off=[];
+  if(!cfg)return{on:on,off:off,cur:cur};
+  Object.keys(boards).forEach(function(k){if(boards[k].s||k===cur)all.push(boards[k])});
+  // The board on this page is always listed, even before its state is in.
+  if(!boards[cur])all.push({t:cur,on:online,s:state,at:stateAt});
+  all.forEach(function(b){if(isOn(b)&&b.s)live[nm(b).toLowerCase()]=1});
+  all.forEach(function(b){
+   if(b.t!==cur&&!isOn(b)&&(live[nm(b).toLowerCase()]||hidden.indexOf(b.t)>=0))return;
+   (isOn(b)?on:off).push(b)});
+  function by(a,b){return nm(a).localeCompare(nm(b),undefined,{sensitivity:'base'})||
+   (a.t<b.t?-1:a.t>b.t?1:0)}
+  on.sort(by);off.sort(by);
+  return{on:on,off:off,cur:cur};
+ }
+ function drawSoon(){if(!drawT)drawT=setTimeout(draw,150)}
+ function draw(){
+  drawT=0;var L=lists(),btn=$('b_rbd');
+  if(btn)btn.querySelector('b').textContent=up&&L.on.length?L.on.length:'';
+  if(!$('rbd')||$('rbd').className!=='on')return;
+  // Rows are rebuilt only when which boards are listed, or where, has
+  // changed; otherwise only their words are, so a row never moves or
+  // vanishes under a finger just because a board sent its state.
+  var sig=L.cur+'|'+L.on.map(function(b){return b.t}).join(',')+'|'+
+   L.off.map(function(b){return b.t}).join(',');
+  if(sig!==drawn){drawn=sig;
+   [['rbd_on',L.on,0],['rbd_off',L.off,1]].forEach(function(a){
+    var box=$(a[0]);box.textContent='';a[1].forEach(function(b){box.appendChild(row(b,a[2],L.cur))})});
+  }
+  // v33: the sync groups, a letter and a colour each, as on the list of
+  // boards on the local network
+  var G=groupsOf(L.on.concat(L.off));
+  [].forEach.call(document.querySelectorAll('#rbd .rbr'),function(r){
+   var b=boards[r.dataset.t]||{t:r.dataset.t,on:online,s:state},m=r.querySelector('.rbm'),
+    g=b.s&&b.s.gid?G[b.s.gid]:null,gl=r.querySelector('.rbg'),cb=r.querySelector('.rbc input');
+   r.querySelector('i').className=dot(b);
+   r.querySelector('b').textContent=nm(b);
+   r.querySelector('.w').textContent=what(b);
+   r.querySelector('small').textContent=b.t+(b.s&&b.s.net?' · WiFi '+b.s.net:'');
+   var k=gl.querySelector('u');k.textContent=g?g.k:'';k.style.background=g?g.c:'';
+   gl.querySelector('span').textContent=g?groupText(b,g)
+    :isOn(b)&&b.s&&!capable(b)?'Firmware '+(b.s.ver||'?')+': update it to v33 to run it together with others from here.':'';
+   gl.style.display=gl.querySelector('span').textContent?'':'none';
+   m.style.borderLeft=g?'9px solid '+g.c:'';
+   if(cb){cb.disabled=!capable(b);cb.checked=!!sel[b.t]&&capable(b)}
+  });
+  tools(L);
+  $('rbd_oh').style.display=L.off.length?'':'none';
+  $('rbd_w').textContent=!cfg?'Set up the relay first (the Relay button).'
+   :!up?'Not connected to the relay just now.'
+   :seeAll===false?'The broker does not let this phone’s user see other topics, so only '+
+    'this board can be listed. Allow that user to subscribe to +/state and +/online '+
+    '(or to every topic) in the broker’s access settings.':'';
+ }
+ function row(b,isOff,cur){
+  var r=document.createElement('div'),m=document.createElement('button'),
+   c=document.createElement('label');
+  r.className='rbr'+(b.t===cur?' cur':'')+(isOff?' off':'');r.dataset.t=b.t;
+  // v33: a box to tick, for the boards connected (a gap for the others)
+  c.className='rbc';
+  if(!isOff){var cb=document.createElement('input');cb.type='checkbox';
+   cb.setAttribute('aria-label','Select '+nm(b));
+   cb.onchange=function(){if(cb.checked)sel[b.t]=1;else delete sel[b.t];gnote('');tools()};
+   c.appendChild(cb)}
+  r.appendChild(c);
+  m.type='button';m.className='rbm';
+  m.innerHTML='<i></i><b></b><span class="w"></span><span class="rbg"><u></u><span></span></span>'+
+   '<small></small><em>on this page</em>';
+  if(b.t===cur)m.setAttribute('aria-current','true');
+  m.onclick=function(){pick(b.t)};r.appendChild(m);
+  if(isOff&&b.t!==cur){var x=document.createElement('button');x.type='button';x.className='rbh';
+   x.textContent='Hide';x.title='Not listed on this phone again unless it connects';
+   x.onclick=function(){hidden.push(b.t);storeHidden();draw()};r.appendChild(x)}
+  return r;
+ }
+ // ---------- v33: boards together ----------
+ var GC=['#7cc4f5','#f59fb8','#9be08e','#f5c46b','#c8a7f2','#8fe0d6'],
+  GW={pause:'Paused',play:'Playing',sync:'In step',unsync:'Not in step'};
+ function vnum(f){var m=/^v(\d+)/.exec(f||'');return m?+m[1]:0}
+ function secs(ms){return (ms/1000).toFixed(ms<10000?1:0)+' s'}
+ // A board that can take part: connected, and on v33 or later (its state
+ // says who it is and which group it is in).
+ function capable(b){return !!(b&&b.s&&b.s.id&&vnum(b.s.ver)>=33&&isOn(b))}
+ function names(bs){return bs.map(nm).join(', ')}
+ // Every group: a letter and a colour, its members, its cycle (the longest
+ // of those connected)
+ function groupsOf(bs){
+  var m={},o=[];
+  bs.forEach(function(b){var g=b.s&&b.s.gid;if(!g)return;
+   if(!m[g]){m[g]={id:g,m:[]};o.push(m[g])}m[g].m.push(b)});
+  o.sort(function(a,b){return nm(a.m[0]).localeCompare(nm(b.m[0]),undefined,{numeric:true})});
+  o.forEach(function(g,i){g.k=String.fromCharCode(65+i%26);g.c=GC[i%GC.length];
+   g.cycle=g.m.filter(isOn).reduce(function(a,b){return Math.max(a,b.s.cy||0)},0)});
+  return m;
+ }
+ function groupText(b,g){
+  var others=g.m.filter(function(x){return x.t!==b.t}),here=others.filter(isOn),
+   t=others.length?'In step with '+others.map(function(x){return nm(x)+(isOn(x)?'':' (off)')}).join(', ')
+    :'Group '+g.k+' \u2014 its other boards are not on the relay';
+  // boards of the group the board sees at home that are not on the relay
+  var more=(b.s.grp||0)-here.length;
+  if(isOn(b)&&others.length&&more>0)t+=' and '+more+' more';
+  if(isOn(b)&&b.s.gl&&(here.length||b.s.grp>0))t+=' \u00b7 keeps the time';
+  if(isOn(b)&&b.s.cy)t+=' \u00b7 cycle '+secs(b.s.cy)+(g.cycle>b.s.cy?', group '+secs(g.cycle):'');
+  return t;
+ }
+ function gnote(m,bad){var n=$('rbd_n');if(!n)return;n.textContent=m||'';n.className=bad?'e':''}
+ function ticked(L){return L.on.filter(function(b){return sel[b.t]})}
+ function tools(L){
+  L=L||lists();
+  var t=ticked(L).filter(capable),all=L.on.filter(capable);
+  $('rbd_pz').disabled=$('rbd_pl').disabled=busy||!t.length;
+  $('rbd_sy').disabled=busy||t.length<2;
+  $('rbd_us').disabled=busy||!t.some(function(b){return b.s.gid});
+  $('rbd_all').disabled=busy||!all.length;
+  $('rbd_all').textContent=all.length&&all.every(function(b){return sel[b.t]})?'Select none':'Select all';
+  $('rbd_t').style.display=L.on.length>1?'':'none';
+ }
+ function selAll(){
+  var all=lists().on.filter(capable),on=all.length&&all.every(function(b){return sel[b.t]});
+  sel={};if(!on)all.forEach(function(b){sel[b.t]=1});gnote('');drawn='';draw();
+ }
+ // A command to the board with topic tp (not necessarily the one on the
+ // page): its answer is its next state carrying the id. Asked a second
+ // time if that does not come in 5 s -- the board does it only once.
+ function sendTo(tp,url,id,tries){
+  return new Promise(function(ok,no){
+   var w={t:tp,id:id,ok:function(s){clearTimeout(w.timer);ok(s)}};
+   gwait.push(w);
+   tx(pkt(0x30,[].concat(str(tp+'/cmd'),Array.from(enc.encode(url)))));
+   w.timer=setTimeout(function(){var i=gwait.indexOf(w);if(i>=0)gwait.splice(i,1);
+    if(tries>1)sendTo(tp,url,id,tries-1).then(ok,no);else no(new Error('no answer'))},5000);
+  });
+ }
+ // Pause / Play / Run in step / Not in step for the ticked boards. One
+ // board does it -- the one on this page if it can, else the first ticked
+ // -- and tells the others over their network, as the list of boards does.
+ function grp(op){
+  if(busy)return;
+  var L=lists(),tk=ticked(L),ok=tk.filter(capable),old=tk.filter(function(b){return !capable(b)});
+  if(!ok.length){gnote(old.length?names(old)+(old.length===1?' needs':' need')+
+   ' v33 or later for this.':'Tick the boards first.',1);return}
+  if(op==='sync'&&ok.length<2){gnote('Tick two boards or more to run them in step.',1);return}
+  if(!up){gnote('Not connected to the relay just now.',1);return}
+  // Run in step: a board already in a group goes first, so that the
+  // others join its group instead of starting a new one.
+  if(op==='sync')ok.sort(function(a,b){return (a.s.gid?0:1)-(b.s.gid?0:1)});
+  var cur=boards[topic()],ex=capable(cur)?cur:ok[0],id=++rid;
+  var url='/group?op='+op+'&ids='+ok.map(function(b){return b.s.id}).join(',')+'&id='+id;
+  busy=true;tools();gnote('Asking '+nm(ex)+'\u2026');
+  sendTo(ex.t,url,id,2).then(function(s){
+   busy=false;tools();
+   var r=s.gr;
+   if(!r){gnote(nm(ex)+' did not take the command \u2014 is it on v33?',1);return}
+   if(!r.ok){
+    var e=r.err||'that did not work';
+    if(/none of those/.test(e))e='none of the ticked boards is on its network just now';
+    else if(/two boards/.test(e))e='it sees only one of these boards on its network \u2014 a group\u2019s '+
+     'boards must all be on the same WiFi';
+    gnote(nm(ex)+': '+e+'.',1);return}
+   var t=GW[op]+': '+names(ok)+'.';
+   if(op==='sync')t='These now run in step: '+names(ok)+'. Each cycle starts on all of them '+
+    'together, once the longest is over (the first one may be cut short to get there).';
+   if(op==='unsync')t='Each of these runs on its own again: '+names(ok)+'.';
+   if((op==='play'||op==='pause')&&r.n>ok.length)t+=' (Their groups too, so that they stay in step.)';
+   if(r.miss)t+=' '+r.miss+' of them '+(r.miss===1?'is':'are')+' not on '+nm(ex)+'\u2019s network.';
+   if(old.length)t+=' Not '+names(old)+': v33 or later needed.';
+   gnote(t);
+  },function(){busy=false;tools();gnote(nm(ex)+' did not answer.',1)});
+ }
+ function openMenu(){$('rbd').className='on';drawn='';gnote('');draw();
+  var c=document.querySelector('#rbd .rbr.cur .rbm')||document.querySelector('#rbd .rbm');
+  if(c)try{c.focus({preventScroll:true})}catch(e){}}
+ function closeMenu(){$('rbd').className=''}
+ // Switch this page to another board.
+ function pick(tp){
+  closeMenu();
+  if(tp===topic())return;
+  // Whatever was asked of the board being left and not yet answered is
+  // dropped -- never settled, so the page does not retry it, because a
+  // retry would now go to the board picked (see keep() below).
+  gen++;waiters=waiters.filter(function(w){return w.id===null});
+  if(fromUrl){urlTopic=tp;
+   try{history.replaceState(history.state,'',location.pathname+
+    location.search.replace(/([?&]topic=)[^&#]*/,'$1'+encodeURIComponent(tp))+location.hash)}catch(e){}}
+  else if(cfg){cfg.topic=tp;
+   // Only the topic: settings another tab saved meanwhile are kept.
+   try{var c=JSON.parse(localStorage.getItem(KEY)||'null');
+    if(c){c.topic=tp;localStorage.setItem(KEY,JSON.stringify(c))}else store()}catch(e){}}
+  var b=boards[tp]||{t:tp,on:null,s:null,at:0};
+  state=b.s;stateAt=b.at;online=b.on===null&&b.s?true:b.on;
+  showState();
+  // The page shows the new board at once, from the state already here,
+  // and asks for its name, network and version again. (On an older
+  // firmware without a name the topic stands in.)
+  var w=window;
+  if(typeof w.dropNote==='function')w.dropNote();
+  $('bname').textContent=nm(b);document.title=nm(b)+' · LED Control';
+  if(typeof w.boardInfo==='function')w.boardInfo();
+  if(state&&typeof w.show==='function')try{w.show(state)}catch(e){}
+  drawSoon();
+ }
+ // A request is answered only while the page is still on the board it
+ // was meant for; after a switch it stays unanswered (see pick()).
+ function keep(g,p){return new Promise(function(ok,no){
+  p.then(function(v){if(g===gen)ok(v)},function(e){if(g===gen)no(e)})})}
+
+ // ---------- the page's fetch(), answered through the relay ----------
+ function R(status,obj){return{ok:status>=200&&status<300,status:status,
+  json:function(){return Promise.resolve(obj)},
+  text:function(){return Promise.resolve(typeof obj==='string'?obj:JSON.stringify(obj))}}}
+ function connected(ms){
+  if(up)return Promise.resolve();
+  return new Promise(function(ok,no){connWait.push(ok);
+   setTimeout(function(){no(new Error('relay not connected'))},ms)});
+ }
+ function waitFor(id,ms){
+  return new Promise(function(ok,no){
+   var w={id:id,ok:ok};waiters.push(w);
+   if(ms)setTimeout(function(){var i=waiters.indexOf(w);
+    if(i>=0){waiters.splice(i,1);no(new Error('no answer'))}},ms);
+  });
+ }
+ function fresh(){return up&&online!==false&&state&&Date.now()-stateAt<40000}
+ var PATHS=['/press','/status','/dither','/fade','/front','/save','/load'];
+ function relayFetch(u){
+  var path=u.split('?')[0];
+  if(path==='/wifiinfo'){
+   // Waits for as long as it takes -- the page asks this only once, and
+   // on a first visit the settings form has to be filled in first.
+   var get=state?Promise.resolve(state):waitFor(null,0);
+   return get.then(function(d){
+    return R(200,{relay:true,ssid:d.net||'',ver:d.ver,broker:cfg.host,name:d.bn||''})});
+  }
+  // Nothing has changed since the last state the board published, so a
+  // status poll costs no traffic at all. The board republishes on every
+  // change and every 15 s regardless.
+  if(path==='/status'&&fresh())return Promise.resolve(R(200,state));
+  if(PATHS.indexOf(path)<0)return Promise.reject(new Error('not available through the relay'));
+  var g=gen;
+  // The broker has said the board is gone: fail fast, so the page says
+  // "did not answer" in a second or so rather than after every retry.
+  if(online===false)return keep(g,new Promise(function(ok,no){
+   setTimeout(function(){no(new Error('board offline'))},300)}));
+  var m=/[?&]id=(\d+)/.exec(u),id;
+  if(m)id=parseInt(m[1],10);
+  else{id=++rid;u+=(u.indexOf('?')<0?'?':'&')+'id='+id}
+  return keep(g,connected(8000).then(function(){
+   if(g!==gen)return new Promise(function(){});
+   var w=waitFor(id,5000);
+   tx(pkt(0x30,[].concat(str(t('cmd')),Array.from(enc.encode(u)))));
+   return w;
+  }).then(function(d){
+   return d.res===409?R(409,'nothing saved'):R(d.res||200,d)}));
+ }
+ window.fetch=function(u,o){
+  if(typeof u==='string'&&u.charAt(0)==='/')return relayFetch(u);
+  return realFetch.apply(window,arguments);
+ };
+
+ // ---------- start ----------
+ document.addEventListener('DOMContentLoaded',function(){
+  var hd=document.querySelector('header'),b=document.createElement('div');
+  b.id='rly';b.innerHTML='<i></i><span>…</span><button type="button">Relay</button>';
+  b.querySelector('button').onclick=openForm;
+  hd.parentNode.insertBefore(b,hd.nextSibling);
+  // WiFi settings, firmware update and the parameter editor exist only
+  // on the local network. So does the list of boards there -- the Boards
+  // button here (v31) lists the boards on the broker instead.
+  ['b_wifi','b_fw','b_edit','b_hub'].forEach(function(i){var e=$(i);if(e)e.style.display='none'});
+  var hub=$('b_hub');
+  if(hub){var mb=document.createElement('button');mb.type='button';mb.id='b_rbd';
+   mb.className='hubb';mb.title='Every board on this relay: switch to another';
+   mb.innerHTML='<svg class="ic"><use href="#grd"/></svg>Boards <b></b>';
+   mb.onclick=openMenu;hub.parentNode.insertBefore(mb,hub.nextSibling)}
+  document.addEventListener('keydown',function(e){
+   if(e.key==='Escape'&&$('rbd').className==='on')closeMenu()});
+  var f=document.querySelector('footer');
+  if(f)f.textContent='Phone page: every key goes through the relay to the board, '+
+   'and does exactly what the same key on the IR remote does.';
+  document.title='LED Control (remote)';
+  showState();
+ });
+ // A phone suspends the connection while the page is in the background;
+ // coming back should not wait for a retry timer to notice.
+ document.addEventListener('visibilitychange',function(){
+  if(!document.hidden&&cfg&&!up){retryMs=2000;restart()}});
+ load();
+ if(document.readyState==='loading')
+  document.addEventListener('DOMContentLoaded',restart);else restart();
+ return{saveForm:saveForm,closeForm:closeForm,open:openForm,
+  openMenu:openMenu,closeMenu:closeMenu,pick:pick,grp:grp,selAll:selAll};
+})();
+</script>
+<!--RELAY-->
+<script>
+var noteUntil=0,E=function(i){return document.getElementById(i)};
+function fail(m){var n=E('err');n.className='note e';n.textContent=m||''}
+function note(m,ms){noteUntil=Date.now()+(ms||1800);
+ var n=E('err');n.className='note';n.textContent=m}
+function clearNote(){if(Date.now()>noteUntil&&!E('err').classList.contains('e'))
+ E('err').textContent=''}
+function dropNote(){noteUntil=0;E('err').className='note';E('err').textContent=''}
+
+var OPTS={cache:'no-store'},last=null;
+function T(i,v){E(i).textContent=v}
+
+function show(d){
+ last=d;
+ T('s_sh',d.shape);T('v_sh',d.shape);T('v_shn',d.shapes);
+ T('s_md',!d.power?'off':d.paused?'paused \u00b7 '+d.mode:d.mode);
+ E('b_pause').setAttribute('aria-pressed',d.paused?'true':'false');
+ E('b_demo').setAttribute('aria-pressed',d.demo?'true':'false');
+ T('demotx',d.demo?'STOP DEMO':'DEMO');
+ T('psub',(d.paused?'Paused: the strip holds. What you change now shows when you press Play.'
+  :d.demo?'Demo, step '+d.demo+' of '+d.demoN+'. Press it again to stop; every shape goes back to its own mode.'
+  :'Play starts every shape together. Demo plays the sequence set on the Edit page ('+
+   d.demoN+' step'+(d.demoN===1?'':'s')+').')+syncNote(d));T('s_br',d.bright);T('v_br',d.bright);
+ T('s_sa',d.sat);T('v_sa',d.sat);
+ // a box greys itself out when its value is not in play just now
+ function V(i,v,live){var e=E(i);e.textContent=live?v:(v||'off');
+  e.parentNode.className='val'+(live?'':' na')}
+ var anim=!!(d.pm||d.rm||d.wm);
+ V('v_pl',d.palette,d.multi);V('v_pm',d.pm,d.pm>0);
+ V('v_rm',d.rm,d.rm>0);V('v_wm',d.wm,d.wm>0);V('v_stn',d.state,anim);
+ E('stsub').textContent=d.wm?'0: a dark notch travels; 1: a sine wave; 2: one full period; 3: two periods.'
+  :'how many groups the LEDs split into. One too big for the shape is skipped.';
+
+ // hue has no meaning while the colours come from a palette
+ E('s_hw').className='st'+(d.multi?' na':'');
+ T('s_hu',d.multi?'palette':d.hue+'\u00b0');
+
+ // timings exist only while something is animating
+ var t=d.timed;
+ ['e','c','d'].forEach(function(k){E('s_'+k+'w').className='st'+(t?'':' na')});
+ // v31: a mode in two parts has a fade time for each: part 1 / part 2
+ var ev=t?(d.ev2>=0?d.eval+'/'+d.ev2:d.eval):'\u2013';
+ T('s_ev',ev);T('v_ev',ev);
+ T('s_ca',t?d.calm:'\u2013');T('v_ca',t?d.calm:'\u2013');
+ T('s_dk',t?d.dark:'\u2013');T('v_dk',t?d.dark:'\u2013');
+ [['s_ev',ev],['s_ca',d.calm],['s_dk',d.dark]].forEach(function(a){
+  var n=t?String(a[1]).length:0;E(a[0]).className=n>5?'lg':n>4?'md':''});
+ E('c_tim').style.opacity=t?1:.5;
+ E('tsub').textContent=!t?'Only while a pulse or running mode is active.'
+  :d.own?'This demo step\u2019s own times: the keys change them for this step only.'
+  :'Big key lengthens, small key shortens.';
+
+ E('b_on').setAttribute('aria-pressed',d.power?'true':'false');
+ E('b_off').setAttribute('aria-pressed',d.power?'false':'true');
+ E('b_sgl').style.outline=d.multi?'none':'3px solid var(--ok)';
+ E('b_mlt').style.outline=d.multi?'3px solid var(--ok)':'none';
+ E('b_sgl').style.outlineOffset='-1px';E('b_mlt').style.outlineOffset='-1px';
+ E('csub').textContent=d.multi
+  ?'Palette '+d.palette+' of 5: the hue keys are idle.'
+  :'Single colour: the hue keys steer it.';
+ E('c_hue').style.opacity=d.multi?.45:1;
+ E('c_pal').style.opacity=d.multi?1:.5;
+
+ E('dth').querySelector('span').textContent=
+  'Dithering is '+(d.dither?'on':'off');
+ if(d.fg)E('fcv').querySelector('span').textContent=fgName(d.fg);
+ if(d.re!==undefined)E('rfr').querySelector('span').textContent=reName(d.re);
+ return d;
+}
+
+// Up to three attempts: a request can go missing with no error the browser
+// shows -- most often when it reuses a connection the board is closing,
+// which it does after every answer. Each press carries an id the board
+// applies only once, so retrying is safe.
+function send(url,tries){
+ tries=tries||1;
+ return fetch(url,OPTS).then(function(r){
+  if(!r.ok)throw r.status;return r.json()}).then(show).catch(function(e){
+  if(e===409)throw e;
+  if(tries<3)return new Promise(function(res){setTimeout(res,200*tries)})
+   .then(function(){return send(url,tries+1)});
+  throw e});
+}
+var pid=Date.now()%1000000;
+function press(b){return send('/press?b='+b+'&id='+(++pid))}
+function oops(){fail('the board did not answer \u2014 press again')}
+
+function p(b){
+ var seq=last?last.seq:null;dropNote();
+ press(b).then(function(d){
+  if(seq!==null&&d.seq===seq)note('the board did not register that press',3000);
+ }).catch(oops);
+}
+function pk(b){
+ var seq=last?last.seq:null;dropNote();
+ if(last&&!last.power){note('turn the strip on first',2500);return}
+ press(b).then(function(d){
+  if(b===27&&!d.demo&&!(last&&last.demo)&&!d.demoN)note('the demo has no steps \u2014 set them on the Edit page',3500);
+  else if(seq!==null&&d.seq===seq)note('the board did not register that press',3000);
+ }).catch(oops);
+}
+function power(on){
+ dropNote();
+ if(!on){press(2).catch(oops);return}
+ if(last&&last.power){note('already on',1500);return}
+ press(3).catch(oops);
+}
+function reset(){
+ if(!confirm('Reset every shape to the built-in defaults?'))return;
+ dropNote();
+ if(last&&!last.power){note('turn the strip on first, then Reset',2600);return}
+ press(3).then(function(){note('reset to defaults')}).catch(oops);
+}
+function multi(want){
+ dropNote();
+ if(last&&last.multi===!!want){note(want?'already on the palette':'already single colour',1500);return}
+ press(7).catch(oops);
+}
+function hue(b,name){
+ var before=last?last.hue:null,m=last&&last.multi;
+ dropNote();
+ press(b).then(function(d){
+  if(d.multi)note('palette mode: the colours come from the palette, not the hue',2600);
+  else if(before!==null&&!m&&d.hue===before)
+   note('already at the '+name+' end of its band',2500);
+ }).catch(oops);
+}
+// v28: the fade curve, round the four usual values (any 1.0-4.0 can be
+// set with /fade?g=10..40)
+var FG=[10,20,25,30];
+function fcurve(){
+ var g=last&&last.fg?last.fg:25,i=FG.indexOf(g);dropNote();
+ send('/fade?g='+FG[(i+1)%FG.length]).catch(oops);
+}
+// v30: the running front: soft 2 -> 3 -> sharp -> 1 -> 2
+var RE=[2,3,0,1];
+function rfront(){
+ var w=last&&last.re!==undefined?last.re:2,i=RE.indexOf(w);dropNote();
+ send('/front?w='+RE[(i+1)%RE.length]).catch(oops);
+}
+function reName(w){return 'Running front: '+(w?'soft, '+w+' LED'+(w===1?'':'s'):'sharp')}
+function fgName(g){return 'Fade curve '+(g/10).toFixed(1)+
+ (g<=10?' \u00b7 linear':g===25?' \u00b7 even':g===30?' \u00b7 CIE L*':'')}
+
+function dither(){
+ var on=last?last.dither:true;dropNote();
+ send('/dither?on='+(on?0:1)).catch(oops);
+}
+function st(){return send('/status').catch(function(){fail('not reachable')})}
+function save(){
+ dropNote();
+ fetch('/save',OPTS).then(function(r){if(!r.ok)throw 0;note('saved')})
+  .catch(function(){fail('not reachable')});
+}
+function load(){
+ if(!confirm('Replace the current settings with the last saved ones?'))return;
+ dropNote();
+ fetch('/load',OPTS).then(function(r){
+  if(r.status===409){note('nothing saved yet',2500);return}
+  if(!r.ok)throw 0;
+  note('loaded');setTimeout(st,400);
+ }).catch(function(){fail('not reachable')});
+}
+
+// v27: in a sync group, the Playback card says with whom. The names come
+// from /wifiinfo, asked again whenever the number of them changes.
+var gw=null,gwN=-2;
+function syncNote(d){
+ var n=d.grp;if(n===undefined||n<0){gwN=-2;return''}
+ if(n!==gwN){gwN=n;fetch('/wifiinfo',OPTS).then(function(r){return r.json()})
+  .then(function(i){gw=i.gwith||null;if(last)show(last)}).catch(function(){})}
+ return n===0?' In a sync group \u2014 none of the other boards is on just now.'
+  :' In step with '+(gw&&gw.length?gw.join(', '):n+' other board'+(n===1?'':'s'))+
+   ': each cycle starts together with theirs. Pause and Play here act on this board '+
+   'alone; the list of boards plays or pauses the whole group.';
+}
+
+// v26: inside the list of boards' side-by-side view the Boards button
+// would only open the list again, inside the frame.
+try{if(window.self!==window.top)E('b_hub').style.display='none'}catch(e){}
+
+// v31 (phone page): a named function, so that the phone page can ask
+// again after its Boards menu has switched it to another board.
+function boardInfo(){return fetch('/wifiinfo',OPTS).then(function(r){return r.json()}).then(function(d){
+ // v26: the board's own name, on the page and on its browser tab -- with
+ // several boards open, the tabs are otherwise all "LED Control".
+ if(d.name){T('bname',d.name);document.title=d.name+' \u00b7 LED Control'}
+ // remote.html: the same page, reaching the board through the relay.
+ if(d.relay){
+  T('net','via relay \u00b7 '+d.ssid);
+  var rv=E('pver').textContent;
+  if(d.ver&&d.ver!==rv)
+   fail('This phone page is '+rv+' but the board is running '+d.ver+
+        ' \u2014 download remote.html again from the board\u2019s WiFi settings page.');
+  E('nethint').innerHTML='Reached over the internet through <b>'+d.broker+
+   '</b>. The board itself is on <b>'+d.ssid+'</b>.';
+  return;
+ }
+ T('net',(d.ap?'own network ':'')+d.ssid+' \u00b7 '+d.ip);
+ // The version is baked into this page AND reported by the board, both
+ // from the same macro. If they differ the browser is showing a cached
+ // copy of an older page -- which otherwise looks completely normal.
+ var pv=E('pver').textContent;
+ if(d.ver&&d.ver!==pv)
+   fail('This page is '+pv+' but the board is running '+d.ver+
+        ' \u2014 reload the page (Ctrl-F5) to get the current one.');
+ E('nethint').innerHTML=(d.ap?'On its own network <b>'+d.ssid+'</b>. ':'On <b>'+d.ssid+'</b>. ')+
+  'This page is at <b>http://'+d.ip+'/</b> or <b>http://'+d.host+'.local/</b>. '+
+  // v34: the simple way onto a WiFi
+  (d.ap?'<a href="/start">Connect it to a WiFi</a>':'All boards: <b>http://'+d.alias+'.local/</b>');
+}).catch(function(){})}
+boardInfo();
+
+st();setInterval(function(){st().then(clearNote)},2000);
+</script></body></html>
